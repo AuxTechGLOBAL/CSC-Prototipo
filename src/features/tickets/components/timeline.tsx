@@ -2,6 +2,7 @@ import { Badge } from '../../../components/ui/badge'
 import type { Ticket, TicketEventType, User } from '../../../types/domain'
 import { formatDate } from '../../../lib/utils'
 import { MessageSquare, GitBranch, UserCheck, FileClock } from 'lucide-react'
+import { UserAvatar } from './user-avatar'
 
 type TimelineEntry = {
   id: string
@@ -86,6 +87,17 @@ export function Timeline({ ticket, users }: { ticket: Ticket; users: User[] }) {
     })),
   ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
+  const now = Date.now()
+
+  const relativeTime = (iso: string) => {
+    const minutes = Math.max(1, Math.floor((now - new Date(iso).getTime()) / 60_000))
+    if (minutes < 60) return `ha ${minutes} min`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `ha ${hours} h`
+    const days = Math.floor(hours / 24)
+    return `ha ${days} d`
+  }
+
   return (
     <ol className="space-y-3">
       {entries.map((entry) => {
@@ -95,10 +107,13 @@ export function Timeline({ ticket, users }: { ticket: Ticket; users: User[] }) {
 
         return (
           <li key={entry.id} className={`rounded-lg border bg-[var(--surface-2)] p-3 ${meta.border}`}>
-            <div className="mb-2 flex items-center gap-2">
-              <Icon size={14} className="text-[var(--text-soft)]" />
-              <Badge variant={meta.variant}>{meta.badge}</Badge>
-              {entry.isInternal && <Badge variant="warning">Interno</Badge>}
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Icon size={14} className="text-[var(--text-soft)]" />
+                <Badge variant={meta.variant}>{meta.badge}</Badge>
+                {entry.isInternal && <Badge variant="warning">Interno</Badge>}
+              </div>
+              <UserAvatar user={actor} dense />
             </div>
             <p className="text-sm text-[var(--text-strong)]">{entry.body}</p>
             {!!entry.attachments?.length && (
@@ -112,7 +127,9 @@ export function Timeline({ ticket, users }: { ticket: Ticket; users: User[] }) {
             )}
             <div className="mt-2 flex items-center justify-between text-xs text-[var(--text-soft)]">
               <span>{actor?.name ?? entry.actorId}</span>
-              <span>{formatDate(entry.createdAt)}</span>
+              <span>
+                {relativeTime(entry.createdAt)} ({formatDate(entry.createdAt)})
+              </span>
             </div>
           </li>
         )

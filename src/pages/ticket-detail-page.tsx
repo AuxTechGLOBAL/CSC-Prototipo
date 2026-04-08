@@ -7,7 +7,7 @@ import { ConfirmActionDialog } from '../components/confirm-action-dialog'
 import { Dialog } from '../components/ui/dialog'
 import { Select } from '../components/ui/select'
 import { Textarea } from '../components/ui/textarea'
-import { useAddCommentMutation, useAssignTicketMutation, useChangeStatusMutation, useServicesQuery, useTicketQuery, useUsersQuery } from '../hooks/use-csc-data'
+import { useAddCommentMutation, useAssignTicketMutation, useChangeStatusMutation, useKbQuery, useServicesQuery, useTicketQuery, useUsersQuery } from '../hooks/use-csc-data'
 import { useAppStore } from '../store/app-store'
 import { describeTransitionPt, getAllowedTransitions, getTransitionActionLabel } from '../lib/workflow'
 import { StatusBadge } from '../features/tickets/components/status-badge'
@@ -15,10 +15,18 @@ import { PriorityBadge } from '../features/tickets/components/priority-badge'
 import { SLAIndicator } from '../features/tickets/components/sla-indicator'
 import { Timeline } from '../features/tickets/components/timeline'
 import { CommentBox } from '../features/tickets/components/comment-box'
+import { UserAvatar } from '../features/tickets/components/user-avatar'
 import type { TicketStatus } from '../types/domain'
 import { Badge } from '../components/ui/badge'
 import { formatDate } from '../lib/utils'
 import { useNow } from '../hooks/use-now'
+
+function getPrimaryContextAction(status: TicketStatus) {
+  if (status === 'New') return 'InTriage' as const
+  if (status === 'Assigned') return 'InProgress' as const
+  if (status === 'InProgress') return 'Resolved' as const
+  return null
+}
 
 export function TicketDetailPage() {
   const { ticketId } = useParams()
@@ -28,8 +36,10 @@ export function TicketDetailPage() {
   const now = useNow()
 
   const ticketQuery = useTicketQuery(ticketId)
+  const ticket = ticketQuery.data
   const usersQuery = useUsersQuery()
   const servicesQuery = useServicesQuery()
+  const kbQuery = useKbQuery(ticket?.serviceId ?? '')
   const assignMutation = useAssignTicketMutation()
   const statusMutation = useChangeStatusMutation()
   const commentMutation = useAddCommentMutation()
@@ -38,7 +48,6 @@ export function TicketDetailPage() {
   const [closeReason, setCloseReason] = useState('')
   const [solutionSummary, setSolutionSummary] = useState('')
 
-  const ticket = ticketQuery.data
   const users = usersQuery.data ?? []
   const activeUser = users.find((user) => user.id === activeUserId)
   const ticketService = servicesQuery.data?.find((service) => service.id === ticket?.serviceId)
@@ -51,6 +60,11 @@ export function TicketDetailPage() {
     return 'Incidente'
   }, [ticket?.title, ticketService?.name])
 
+  const relatedArticles = useMemo(() => {
+    if (!ticket) return []
+    return (kbQuery.data ?? []).filter((article) => !article.serviceId || article.serviceId === ticket.serviceId).slice(0, 4)
+  }, [kbQuery.data, ticket])
+
   const isRequesterForbidden =
     role === 'Requester' && ticket && ticket.requesterId !== activeUserId
 
@@ -58,6 +72,9 @@ export function TicketDetailPage() {
     if (!ticket) return []
     return getAllowedTransitions(ticket.status, role)
   }, [ticket, role])
+
+  const primaryAction = ticket ? getPrimaryContextAction(ticket.status) : null
+  const canRunPrimaryAction = primaryAction ? allowedTransitions.includes(primaryAction) : false
 
   if (ticketQuery.isError) {
     return (
@@ -183,7 +200,7 @@ export function TicketDetailPage() {
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Card className="sticky top-3 z-20">
         <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
           <div>
             <p className="text-xs uppercase tracking-wide text-[var(--text-soft)]">{ticket.id}</p>
@@ -199,7 +216,6 @@ export function TicketDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={ticket.status} />
             <PriorityBadge priority={ticket.priority} />
-            <SLAIndicator dueAt={ticket.dueAt} />
             <Badge variant="neutral">Tipo: {ticketType}</Badge>
             <Badge variant="neutral">Area: {ticket.area}</Badge>
             {ticket.firstResponseAt ? (
@@ -210,7 +226,13 @@ export function TicketDetailPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {canRunPrimaryAction && primaryAction && (
+              <Button size="sm" onClick={() => changeStatus(primaryAction)}>
+                {getTransitionActionLabel(ticket.status, primaryAction)}
+              </Button>
+            )}
             {allowedTransitions.map((next) => (
+              next === primaryAction ? null :
               <Button key={next} size="sm" variant="secondary" onClick={() => changeStatus(next)}>
                 {getTransitionActionLabel(ticket.status, next)}
               </Button>
@@ -277,13 +299,15 @@ export function TicketDetailPage() {
                 <Badge variant="info">Atualizado agora</Badge>
               )}
               {ticket.status === 'AwaitingApproval' && <Badge variant="warning">Aguardando aprovacao</Badge>}
+              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
+                <SLAIndicator dueAt={ticket.dueAt} startedAt={ticket.createdAt} showBar />
+              </div>
               <p><span className="text-[var(--text-soft)]">Solicitante:</span> {users.find((u) => u.id === ticket.requesterId)?.name}</p>
               <p><span className="text-[var(--text-soft)]">Impactado:</span> {ticket.impactedUser}</p>
               <p><span className="text-[var(--text-soft)]">Area:</span> {ticket.area}</p>
-              <p><span className="text-[var(--text-soft)]">Servico:</span> {ticket.serviceId}</p>
-              <div className="pt-2">
-                <SLAIndicator dueAt={ticket.dueAt} startedAt={ticket.createdAt} showBar />
-              </div>
+              <p><span className="text-[var(--text-soft)]">Servico:</span> {ticketService?.name ?? ticket.serviceId}</p>
+              <p><span className="text-[var(--text-soft)]">Criado em:</span> {formatDate(ticket.createdAt)}</p>
+              <p><span className="text-[var(--text-soft)]">Atualizado em:</span> {formatDate(ticket.updatedAt)}</p>
             </CardContent>
           </Card>
 
@@ -292,6 +316,10 @@ export function TicketDetailPage() {
               <CardTitle>Atribuicao</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              <div className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-soft)]">Atendente atual</p>
+                <UserAvatar user={users.find((user) => user.id === ticket.assigneeId)} />
+              </div>
               <Select
                 value={assigneeId}
                 placeholder="Selecionar atendente"
@@ -318,6 +346,21 @@ export function TicketDetailPage() {
                 </div>
               ))}
               {!ticket.attachments.length && <p className="text-sm text-[var(--text-soft)]">Sem anexos.</p>}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Artigos relacionados</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {relatedArticles.map((article) => (
+                <div key={article.id} className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-2)] p-2">
+                  <p className="text-sm font-semibold text-[var(--text-strong)]">{article.title}</p>
+                  <p className="text-xs text-[var(--text-soft)]">{article.tags.join(', ')}</p>
+                </div>
+              ))}
+              {!relatedArticles.length && <p className="text-sm text-[var(--text-soft)]">Nenhum artigo relacionado para este servico.</p>}
             </CardContent>
           </Card>
         </div>
