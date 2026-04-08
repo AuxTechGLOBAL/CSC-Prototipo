@@ -1,4 +1,4 @@
-import { LayoutDashboard, Ticket, CheckCheck, BookOpenText, PlusCircle, UserCircle2, ArrowLeft, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, Ticket, CheckCheck, BookOpenText, PlusCircle, UserCircle2, ArrowLeft, ChevronRight, Workflow } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store/app-store'
@@ -27,6 +27,7 @@ function getNavItemsByRole(role: Role) {
 
   if (role === 'Supervisor' || role === 'Admin') {
     items.push({ label: 'Admin', to: '/admin', icon: UserCircle2 })
+    items.push({ label: 'Flow Builder', to: '/flow-builder', icon: Workflow })
   }
 
   return items

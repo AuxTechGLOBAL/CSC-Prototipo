@@ -121,3 +121,59 @@ textarea {
   border: 3px solid transparent;
   background-clip: padding-box;
 }
+
+.flow-drop-zone {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.react-flow__node {
+  border-radius: 12px;
+}
+
+.react-flow__node.selected {
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.45));
+}
+
+.react-flow__edge-path {
+  animation: flowDash 1.8s linear infinite;
+}
+
+.flow-edge-live .react-flow__edge-path,
+.react-flow__edge.flow-edge-live .react-flow__edge-path {
+  animation-duration: 0.9s;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.7));
+}
+
+.flow-node-live {
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.32), 0 10px 22px rgba(6, 182, 212, 0.3);
+  transform: translateY(-1px);
+}
+
+.flow-controls {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+}
+
+.flow-controls button {
+  background: var(--surface-1);
+  color: var(--text-strong);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.flow-controls button:hover {
+  background: var(--surface-2);
+}
+
+@keyframes flowDash {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -28;
+  }
+}

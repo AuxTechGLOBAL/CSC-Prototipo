@@ -11,6 +11,7 @@ const CreateTicketPage = lazy(() => import('../pages/create-ticket-page').then((
 const ApprovalsPage = lazy(() => import('../pages/approvals-page').then((module) => ({ default: module.ApprovalsPage })))
 const KbPage = lazy(() => import('../pages/kb-page').then((module) => ({ default: module.KbPage })))
 const AdminPage = lazy(() => import('../pages/admin-page').then((module) => ({ default: module.AdminPage })))
+const FlowBuilderPage = lazy(() => import('../pages/flow-builder-page').then((module) => ({ default: module.FlowBuilderPage })))
 const NotFoundPage = lazy(() => import('../pages/not-found-page').then((module) => ({ default: module.NotFoundPage })))
 const ProfilePage = lazy(() => import('../pages/profile-page').then((module) => ({ default: module.ProfilePage })))
 
@@ -77,6 +78,16 @@ export function AppRouter() {
             withSuspense(
               <AdminGuard>
                 <AdminPage />
+              </AdminGuard>,
+            )
+          }
+        />
+        <Route
+          path="/flow-builder"
+          element={
+            withSuspense(
+              <AdminGuard>
+                <FlowBuilderPage />
               </AdminGuard>,
             )
           }
