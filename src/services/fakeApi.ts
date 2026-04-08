@@ -7,6 +7,7 @@ import type {
   ServiceCatalogItem,
   TicketFilters,
   TicketStatus,
+  ViewerContext,
 } from '../types/domain'
 
 function wait(ms = 500) {
@@ -48,15 +49,15 @@ export const fakeApi = {
     return clone(db.listKb(query))
   },
 
-  async listTickets(filters: TicketFilters = {}) {
+  async listTickets(filters: TicketFilters = {}, viewer: ViewerContext) {
     await wait(500)
-    return clone(db.listTickets(filters))
+    return clone(db.listTickets(filters, viewer))
   },
 
-  async getTicket(ticketId: string) {
+  async getTicket(ticketId: string, viewer: ViewerContext) {
     await wait(350)
-    const ticket = db.getTicket(ticketId)
-    if (!ticket) throw new Error('Ticket nao encontrado')
+    const ticket = db.getTicket(ticketId, viewer)
+    if (!ticket) throw new Error('Ticket nao encontrado ou sem permissao de acesso')
     return clone(ticket)
   },
 
@@ -75,21 +76,28 @@ export const fakeApi = {
     nextStatus: TicketStatus,
     role: Role,
     actorId: string,
+    closeData?: { closeReason?: string; solutionSummary?: string },
   ) {
     await wait(500)
-    const current = db.getTicket(ticketId)
-    if (!current) throw new Error('Ticket nao encontrado')
+    const current = db.getTicket(ticketId, { role, userId: actorId })
+    if (!current) throw new Error('Ticket nao encontrado ou sem permissao de acesso')
 
     if (!canTransition(current.status, nextStatus, role)) {
       throw new Error(`Transicao invalida: ${current.status} -> ${nextStatus} para role ${role}`)
     }
 
-    return clone(db.changeStatus(ticketId, nextStatus, actorId))
+    return clone(db.changeStatus(ticketId, nextStatus, actorId, closeData))
   },
 
-  async addComment(ticketId: string, body: string, authorId: string) {
+  async addComment(
+    ticketId: string,
+    body: string,
+    authorId: string,
+    isInternal?: boolean,
+    attachments?: Array<{ name: string; sizeKb: number }>,
+  ) {
     await wait(350)
-    return clone(db.addComment(ticketId, body, authorId))
+    return clone(db.addComment(ticketId, body, authorId, isInternal, attachments))
   },
 
   async decideApproval(input: ApprovalDecision) {

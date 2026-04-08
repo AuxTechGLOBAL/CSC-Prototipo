@@ -42,6 +42,8 @@ export interface TicketComment {
   authorId: string
   body: string
   createdAt: string
+  isInternal?: boolean
+  attachments?: TicketAttachment[]
 }
 
 export type TicketEventType =
@@ -73,6 +75,9 @@ export interface Ticket {
   status: TicketStatus
   priority: Priority
   assigneeId?: string
+  firstResponseAt?: string
+  closeReason?: string
+  solutionSummary?: string
   createdAt: string
   updatedAt: string
   dueAt: string
@@ -112,4 +117,9 @@ export interface ApprovalDecision {
   approve: boolean
   comment: string
   actorId: string
+}
+
+export interface ViewerContext {
+  role: Role
+  userId: string
 }

@@ -25,10 +25,15 @@ export function DashboardPage() {
   const users = usersQuery.data ?? []
   const myQueue = tickets.filter((ticket) => ticket.assigneeId === userId)
   const atRisk = tickets.filter((ticket) => new Date(ticket.dueAt).getTime() - now < 60 * 60 * 1000)
+  const closedTickets = tickets.filter((ticket) => ticket.status === 'Closed')
+  const closedInSla = closedTickets.filter((ticket) => new Date(ticket.updatedAt).getTime() <= new Date(ticket.dueAt).getTime())
+  const slaCompliance = closedTickets.length
+    ? Math.round((closedInSla.length / closedTickets.length) * 100)
+    : 100
 
   return (
     <div className="space-y-4">
-      <section className="grid gap-3 md:grid-cols-3">
+      <section className="grid gap-3 md:grid-cols-4">
         <Card>
           <CardHeader>
             <CardTitle>Tickets abertos</CardTitle>
@@ -53,6 +58,14 @@ export function DashboardPage() {
             <p className="text-3xl font-semibold">{tickets.filter((ticket) => ['New', 'InTriage'].includes(ticket.status)).length}</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>SLA compliance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-3xl font-semibold text-emerald-200">{slaCompliance}%</p>
+          </CardContent>
+        </Card>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
@@ -70,7 +83,10 @@ export function DashboardPage() {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-[var(--text-soft)]">Nenhum ticket na sua fila.</p>
+              <div className="rounded-md border border-dashed border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
+                <p className="text-sm font-medium text-[var(--text-strong)]">Fila limpa</p>
+                <p className="text-sm text-[var(--text-soft)]">Voce nao tem tickets atribuidos no momento.</p>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -86,13 +102,19 @@ export function DashboardPage() {
                 <span className="text-xs text-[var(--text-soft)]">{ticket.status}</span>
               </div>
             ))}
+            {!tickets.length && (
+              <div className="rounded-md border border-dashed border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
+                <p className="text-sm font-medium text-[var(--text-strong)]">Sem backlog na area</p>
+                <p className="text-sm text-[var(--text-soft)]">Nenhum ticket em andamento para exibir.</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </section>
 
       <Card>
         <CardHeader>
-          <CardTitle>Kanban por funcionario</CardTitle>
+          <CardTitle>Kanban por status</CardTitle>
         </CardHeader>
         <CardContent>
           <KanbanBoard tickets={tickets} users={users} />

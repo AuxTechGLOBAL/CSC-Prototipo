@@ -2,6 +2,7 @@ import type {
   ApprovalDecision,
   KbArticle,
   NewTicketInput,
+  ViewerContext,
   ServiceCatalogItem,
   Ticket,
   TicketFilters,
@@ -78,6 +79,35 @@ const kbArticles: KbArticle[] = [
 
 let ticketCounter = 1007
 
+function resolveUser(userId: string) {
+  return users.find((user) => user.id === userId)
+}
+
+function canUserViewTicket(ticket: Ticket, context?: ViewerContext) {
+  if (!context) return true
+
+  if (context.role === 'Admin' || context.role === 'Supervisor') {
+    return true
+  }
+
+  if (context.role === 'Requester') {
+    return ticket.requesterId === context.userId
+  }
+
+  const actor = resolveUser(context.userId)
+  if (!actor) return false
+
+  if (context.role === 'Agent') {
+    return ticket.area === actor.area || ticket.assigneeId === actor.id
+  }
+
+  if (context.role === 'Approver') {
+    return ticket.status === 'AwaitingApproval' && ticket.area === actor.area
+  }
+
+  return false
+}
+
 function buildTicketSeed(
   id: string,
   title: string,
@@ -101,6 +131,7 @@ function buildTicketSeed(
     status,
     priority: status === 'Resolved' ? 'Medium' : 'High',
     assigneeId,
+    firstResponseAt: assigneeId ? createdAt : undefined,
     createdAt,
     updatedAt: createdAt,
     dueAt,
@@ -187,12 +218,14 @@ export const db = {
     })
   },
 
-  listTickets(filters: TicketFilters = {}) {
-    return tickets.filter((ticket) => matchesFilter(ticket, filters))
+  listTickets(filters: TicketFilters = {}, context?: ViewerContext) {
+    return tickets.filter((ticket) => matchesFilter(ticket, filters) && canUserViewTicket(ticket, context))
   },
 
-  getTicket(ticketId: string) {
-    return tickets.find((ticket) => ticket.id === ticketId)
+  getTicket(ticketId: string, context?: ViewerContext) {
+    const ticket = tickets.find((item) => item.id === ticketId)
+    if (!ticket) return undefined
+    return canUserViewTicket(ticket, context) ? ticket : undefined
   },
 
   createTicket(input: NewTicketInput) {
@@ -213,6 +246,7 @@ export const db = {
       area: service.area,
       status: 'New',
       priority: service.impact === 'High' ? 'High' : service.impact === 'Medium' ? 'Medium' : 'Low',
+      firstResponseAt: undefined,
       createdAt,
       updatedAt: createdAt,
       dueAt,
@@ -243,25 +277,49 @@ export const db = {
     if (!ticket) throw new Error('Ticket nao encontrado')
 
     const updatedAt = new Date().toISOString()
+    const isFirstResponse = !ticket.firstResponseAt
+
     ticket.assigneeId = assigneeId
     ticket.updatedAt = updatedAt
+    if (isFirstResponse) {
+      ticket.firstResponseAt = updatedAt
+    }
+
+    const assignmentMessage = isFirstResponse
+      ? `Ticket atribuido para ${assigneeId}. Primeira resposta registrada.`
+      : `Ticket atribuido para ${assigneeId}.`
+
     ticket.events.unshift({
       id: `${ticket.id}-evt-assigned-${Date.now()}`,
       type: 'assigned',
       authorId: actorId,
       createdAt: updatedAt,
-      message: `Ticket atribuido para ${assigneeId}.`,
+      message: assignmentMessage,
     })
 
     return ticket
   },
 
-  changeStatus(ticketId: string, status: TicketStatus, actorId: string) {
+  changeStatus(
+    ticketId: string,
+    status: TicketStatus,
+    actorId: string,
+    closeData?: { closeReason?: string; solutionSummary?: string },
+  ) {
     const ticket = tickets.find((item) => item.id === ticketId)
     if (!ticket) throw new Error('Ticket nao encontrado')
 
     const previous = ticket.status
     const updatedAt = new Date().toISOString()
+
+    if (status === 'Closed') {
+      if (!closeData?.closeReason?.trim() || !closeData?.solutionSummary?.trim()) {
+        throw new Error('CloseReason e SolutionSummary sao obrigatorios para fechar o ticket')
+      }
+
+      ticket.closeReason = closeData.closeReason.trim()
+      ticket.solutionSummary = closeData.solutionSummary.trim()
+    }
 
     ticket.status = status
     ticket.updatedAt = updatedAt
@@ -280,24 +338,38 @@ export const db = {
         type: 'closed',
         authorId: actorId,
         createdAt: updatedAt,
-        message: 'Ticket fechado.',
+        message: `Ticket fechado. Motivo: ${ticket.closeReason}. Solucao: ${ticket.solutionSummary}.`,
       })
     }
 
     return ticket
   },
 
-  addComment(ticketId: string, body: string, authorId: string) {
+  addComment(
+    ticketId: string,
+    body: string,
+    authorId: string,
+    isInternal?: boolean,
+    attachments?: Array<{ name: string; sizeKb: number }>,
+  ) {
     const ticket = tickets.find((item) => item.id === ticketId)
     if (!ticket) throw new Error('Ticket nao encontrado')
 
     const createdAt = new Date().toISOString()
+    const commentId = `${ticket.id}-comment-${Date.now()}`
 
     ticket.comments.unshift({
-      id: `${ticket.id}-comment-${Date.now()}`,
+      id: commentId,
       authorId,
       body,
       createdAt,
+      isInternal,
+      attachments: (attachments ?? []).map((attachment, index) => ({
+        id: `${commentId}-att-${index + 1}`,
+        name: attachment.name,
+        sizeKb: attachment.sizeKb,
+        uploadedAt: createdAt,
+      })),
     })
 
     ticket.events.unshift({
@@ -305,7 +377,7 @@ export const db = {
       type: 'commented',
       authorId,
       createdAt,
-      message: 'Novo comentario registrado.',
+      message: isInternal ? 'Comentario interno registrado.' : 'Novo comentario registrado.',
     })
 
     ticket.updatedAt = createdAt

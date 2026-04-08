@@ -3,65 +3,88 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { ConfirmActionDialog } from '../../components/confirm-action-dialog'
 import { TicketCard } from '../tickets/components/ticket-card'
 import { useAppStore } from '../../store/app-store'
-import { useAssignTicketMutation } from '../../hooks/use-csc-data'
+import { useChangeStatusMutation } from '../../hooks/use-csc-data'
 import { toast } from 'sonner'
-import type { Ticket, User } from '../../types/domain'
+import type { Ticket, TicketStatus, User } from '../../types/domain'
+import { getAllowedTransitions, getStatusLabelPt } from '../../lib/workflow'
 
 export function KanbanBoard({ tickets, users }: { tickets: Ticket[]; users: User[] }) {
   const role = useAppStore((state) => state.activeRole)
-  const assignTicket = useAssignTicketMutation()
+  const statusMutation = useChangeStatusMutation()
   const [dragTicketId, setDragTicketId] = useState<string | null>(null)
-  const [pendingMove, setPendingMove] = useState<{ ticketId: string; fromUserId?: string; toUserId?: string } | null>(null)
+  const [pendingMove, setPendingMove] = useState<{
+    ticketId: string
+    fromStatus: TicketStatus
+    toStatus: TicketStatus
+  } | null>(null)
 
-  const canMoveBetweenQueues = role === 'Supervisor' || role === 'Admin'
+  const canMoveBetweenColumns = role !== 'Requester'
 
-  const assigneeColumns = useMemo(() => {
-    return users.filter((user) => user.role === 'Agent' || user.role === 'Supervisor' || user.role === 'Admin')
-  }, [users])
+  const statusColumns: Array<{ key: TicketStatus; label: string }> = [
+    { key: 'New', label: 'New' },
+    { key: 'InTriage', label: 'InTriage' },
+    { key: 'Assigned', label: 'Assigned' },
+    { key: 'InProgress', label: 'InProgress' },
+    { key: 'WaitingRequester', label: 'Waiting' },
+    { key: 'Resolved', label: 'Resolved' },
+  ]
 
   const grouped = useMemo(() => {
-    const map: Record<string, Ticket[]> = {}
+    const map: Record<TicketStatus, Ticket[]> = {
+      New: [],
+      InTriage: [],
+      AwaitingApproval: [],
+      Assigned: [],
+      InProgress: [],
+      WaitingRequester: [],
+      Resolved: [],
+      Closed: [],
+      Cancelled: [],
+    }
 
-    map.unassigned = tickets.filter((ticket) => !ticket.assigneeId)
-
-    assigneeColumns.forEach((user) => {
-      map[user.id] = tickets.filter((ticket) => ticket.assigneeId === user.id)
+    tickets.forEach((ticket) => {
+      map[ticket.status].push(ticket)
     })
 
     return map
-  }, [tickets, assigneeColumns])
+  }, [tickets])
 
-  const moveTicket = async (sourceTicketId: string, targetUserId?: string) => {
-    if (!canMoveBetweenQueues) {
-      toast.error('Somente Supervisor ou Admin pode mover tickets entre filas de funcionarios.')
+  const moveTicket = async (sourceTicketId: string, targetStatus: TicketStatus) => {
+    if (!canMoveBetweenColumns) {
+      toast.error('Seu perfil nao pode mover tickets no Kanban.')
       return
     }
 
     const ticket = tickets.find((item) => item.id === sourceTicketId)
     if (!ticket) return
-    if (ticket.assigneeId === targetUserId) return
+    if (ticket.status === targetStatus) return
 
-    if (!targetUserId) {
-      toast.error('Este prototipo permite mover entre filas de funcionarios atribuidos.')
+    const allowed = getAllowedTransitions(ticket.status, role)
+    if (!allowed.includes(targetStatus)) {
+      toast.error(`Transicao invalida para ${getStatusLabelPt(targetStatus)} no perfil atual.`)
       return
     }
 
     setPendingMove({
       ticketId: ticket.id,
-      fromUserId: ticket.assigneeId,
-      toUserId: targetUserId,
+      fromStatus: ticket.status,
+      toStatus: targetStatus,
     })
   }
 
   const confirmMove = async () => {
     if (!pendingMove) return
-    if (!pendingMove.toUserId) return
-
-    const targetUser = users.find((user) => user.id === pendingMove.toUserId)
 
     try {
-      await assignTicket.mutateAsync({ ticketId: pendingMove.ticketId, assigneeId: pendingMove.toUserId })
-      toast.success(`Ticket ${pendingMove.ticketId} movido para a fila de ${targetUser?.name ?? pendingMove.toUserId}.`)
+      await statusMutation.mutateAsync({
+        ticketId: pendingMove.ticketId,
+        status: pendingMove.toStatus,
+      })
+      toast.success(
+        `Ticket ${pendingMove.ticketId} movido de ${getStatusLabelPt(pendingMove.fromStatus)} para ${getStatusLabelPt(
+          pendingMove.toStatus,
+        )}.`,
+      )
       setPendingMove(null)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Falha ao mover ticket')
@@ -70,46 +93,33 @@ export function KanbanBoard({ tickets, users }: { tickets: Ticket[]; users: User
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-2">
-      <Card className="min-h-[240px] w-72 shrink-0">
-        <CardHeader>
-          <CardTitle>Sem responsavel</CardTitle>
-          <span className="text-xs text-[var(--text-soft)]">{grouped.unassigned?.length ?? 0}</span>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {(grouped.unassigned ?? []).map((ticket) => (
-              <div key={ticket.id} draggable={canMoveBetweenQueues} onDragStart={() => setDragTicketId(ticket.id)}>
-                <TicketCard ticket={ticket} users={users} />
-              </div>
-            ))}
-            {!grouped.unassigned?.length && <p className="text-xs text-[var(--text-soft)]">Sem tickets</p>}
-          </div>
-        </CardContent>
-      </Card>
-
-      {assigneeColumns.map((assignee) => (
+      {statusColumns.map((column) => (
         <Card
-          key={assignee.id}
+          key={column.key}
           className="min-h-[240px] w-72 shrink-0"
           onDragOver={(event) => event.preventDefault()}
           onDrop={async () => {
             if (!dragTicketId) return
-            await moveTicket(dragTicketId, assignee.id)
+            await moveTicket(dragTicketId, column.key)
             setDragTicketId(null)
           }}
         >
           <CardHeader>
-            <CardTitle>{assignee.name}</CardTitle>
-            <span className="text-xs text-[var(--text-soft)]">{grouped[assignee.id]?.length ?? 0}</span>
+            <CardTitle>{column.label}</CardTitle>
+            <span className="text-xs text-[var(--text-soft)]">{grouped[column.key]?.length ?? 0}</span>
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {(grouped[assignee.id] ?? []).map((ticket) => (
-                <div key={ticket.id} draggable={canMoveBetweenQueues} onDragStart={() => setDragTicketId(ticket.id)}>
+              {(grouped[column.key] ?? []).map((ticket) => (
+                <div key={ticket.id} draggable={canMoveBetweenColumns} onDragStart={() => setDragTicketId(ticket.id)}>
                   <TicketCard ticket={ticket} users={users} />
                 </div>
               ))}
-              {!grouped[assignee.id]?.length && <p className="text-xs text-[var(--text-soft)]">Sem tickets</p>}
+              {!grouped[column.key]?.length && (
+                <div className="rounded-md border border-dashed border-[var(--border-subtle)] bg-[var(--surface-2)] p-2">
+                  <p className="text-xs text-[var(--text-soft)]">Sem tickets nesta coluna</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -117,14 +127,16 @@ export function KanbanBoard({ tickets, users }: { tickets: Ticket[]; users: User
 
       <ConfirmActionDialog
         open={Boolean(pendingMove)}
-        title="Confirmar mudanca de fila"
+        title="Confirmar mudanca de coluna"
         description={
           pendingMove
-            ? `Mover ticket ${pendingMove.ticketId} para a fila de ${users.find((user) => user.id === pendingMove.toUserId)?.name ?? ''}.`
+            ? `Mover ticket ${pendingMove.ticketId} de ${getStatusLabelPt(pendingMove.fromStatus)} para ${getStatusLabelPt(
+                pendingMove.toStatus,
+              )}.`
             : ''
         }
         confirmLabel="Confirmar mudanca"
-        isLoading={assignTicket.isPending}
+        isLoading={statusMutation.isPending}
         onCancel={() => setPendingMove(null)}
         onConfirm={confirmMove}
       />

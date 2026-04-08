@@ -13,8 +13,8 @@ export const queryKeys = {
   users: ['users'] as const,
   services: ['services'] as const,
   kb: (query: string) => ['kb', query] as const,
-  tickets: (filters: TicketFilters) => ['tickets', filters] as const,
-  ticket: (ticketId: string) => ['ticket', ticketId] as const,
+  tickets: (filters: TicketFilters, role: string, userId: string) => ['tickets', filters, role, userId] as const,
+  ticket: (ticketId: string, role: string, userId: string) => ['ticket', ticketId, role, userId] as const,
 }
 
 export function useUsersQuery() {
@@ -33,24 +33,30 @@ export function useKbQuery(query: string) {
 }
 
 export function useTicketsQuery(filters: TicketFilters) {
+  const role = useAppStore((state) => state.activeRole)
+  const userId = useAppStore((state) => state.activeUserId)
+
   return useQuery({
-    queryKey: queryKeys.tickets(filters),
-    queryFn: () => fakeApi.listTickets(filters),
+    queryKey: queryKeys.tickets(filters, role, userId),
+    queryFn: () => fakeApi.listTickets(filters, { role, userId }),
   })
 }
 
 export function useTicketQuery(ticketId?: string) {
+  const role = useAppStore((state) => state.activeRole)
+  const userId = useAppStore((state) => state.activeUserId)
+
   return useQuery({
     enabled: Boolean(ticketId),
-    queryKey: queryKeys.ticket(ticketId ?? ''),
-    queryFn: () => fakeApi.getTicket(ticketId ?? ''),
+    queryKey: queryKeys.ticket(ticketId ?? '', role, userId),
+    queryFn: () => fakeApi.getTicket(ticketId ?? '', { role, userId }),
   })
 }
 
 function invalidateTicketData(queryClient: ReturnType<typeof useQueryClient>, ticketId?: string) {
   queryClient.invalidateQueries({ queryKey: ['tickets'] })
   if (ticketId) {
-    queryClient.invalidateQueries({ queryKey: queryKeys.ticket(ticketId) })
+    queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] })
   }
 }
 
@@ -85,8 +91,16 @@ export function useChangeStatusMutation() {
   const actorId = useAppStore((state) => state.activeUserId)
 
   return useMutation({
-    mutationFn: (input: { ticketId: string; status: TicketStatus }) => {
-      return fakeApi.changeStatus(input.ticketId, input.status, role, actorId)
+    mutationFn: (input: {
+      ticketId: string
+      status: TicketStatus
+      closeReason?: string
+      solutionSummary?: string
+    }) => {
+      return fakeApi.changeStatus(input.ticketId, input.status, role, actorId, {
+        closeReason: input.closeReason,
+        solutionSummary: input.solutionSummary,
+      })
     },
     onSuccess: (ticket) => {
       invalidateTicketData(queryClient, ticket.id)
@@ -99,8 +113,13 @@ export function useAddCommentMutation() {
   const actorId = useAppStore((state) => state.activeUserId)
 
   return useMutation({
-    mutationFn: (input: { ticketId: string; body: string }) => {
-      return fakeApi.addComment(input.ticketId, input.body, actorId)
+    mutationFn: (input: {
+      ticketId: string
+      body: string
+      isInternal?: boolean
+      attachments?: Array<{ name: string; sizeKb: number }>
+    }) => {
+      return fakeApi.addComment(input.ticketId, input.body, actorId, input.isInternal, input.attachments)
     },
     onSuccess: (ticket) => {
       invalidateTicketData(queryClient, ticket.id)

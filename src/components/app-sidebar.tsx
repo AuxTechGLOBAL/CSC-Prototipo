@@ -25,6 +25,10 @@ function getNavItemsByRole(role: Role) {
     items.splice(3, 0, { label: 'Aprovacoes', to: '/approvals', icon: CheckCheck })
   }
 
+  if (role === 'Supervisor' || role === 'Admin') {
+    items.push({ label: 'Admin', to: '/admin', icon: UserCircle2 })
+  }
+
   return items
 }
 

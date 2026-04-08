@@ -91,3 +91,22 @@ export function getStatusLabelPt(status: TicketStatus): string {
 export function describeTransitionPt(currentStatus: TicketStatus, nextStatus: TicketStatus): string {
   return `Alterar status de "${getStatusLabelPt(currentStatus)}" para "${getStatusLabelPt(nextStatus)}".`
 }
+
+const transitionActionLabels: Partial<Record<`${TicketStatus}->${TicketStatus}`, string>> = {
+  'New->InTriage': 'Start Triage',
+  'InTriage->AwaitingApproval': 'Solicitar aprovacao',
+  'InTriage->Assigned': 'Atribuir atendimento',
+  'Assigned->InProgress': 'Start Progress',
+  'InProgress->WaitingRequester': 'Aguardar solicitante',
+  'InProgress->Resolved': 'Resolve',
+  'Resolved->Closed': 'Close',
+  'Resolved->InProgress': 'Reopen',
+  'WaitingRequester->InProgress': 'Retomar atendimento',
+  'AwaitingApproval->Assigned': 'Aprovado e atribuir',
+  'AwaitingApproval->Cancelled': 'Cancelar ticket',
+}
+
+export function getTransitionActionLabel(currentStatus: TicketStatus, nextStatus: TicketStatus): string {
+  const key = `${currentStatus}->${nextStatus}` as const
+  return transitionActionLabels[key] ?? `Mover para ${getStatusLabelPt(nextStatus)}`
+}

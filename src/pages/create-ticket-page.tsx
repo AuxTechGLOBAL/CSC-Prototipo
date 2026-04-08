@@ -19,11 +19,29 @@ export function CreateTicketPage() {
   const currentUserId = useAppStore((state) => state.activeUserId)
   const servicesQuery = useServicesQuery()
   const createMutation = useCreateTicketMutation()
-  const kbQuery = useKbQuery(serviceId)
+  const kbSmartQuery = `${title} ${description}`.trim()
+  const kbQuery = useKbQuery(kbSmartQuery || serviceId)
 
   const selectedService = useMemo(() => {
     return servicesQuery.data?.find((service) => service.id === serviceId)
   }, [serviceId, servicesQuery.data])
+
+  const suggestedArticles = useMemo(() => {
+    const normalized = `${title} ${description}`.toLowerCase()
+    const terms = normalized.split(/\s+/).filter((term) => term.length >= 3)
+
+    return (kbQuery.data ?? [])
+      .map((article) => {
+        const haystack = `${article.title} ${article.tags.join(' ')}`.toLowerCase()
+        const matchScore = terms.reduce((acc, term) => (haystack.includes(term) ? acc + 1 : acc), 0)
+        const serviceBoost = selectedService && article.serviceId === selectedService.id ? 2 : 0
+        return { article, score: matchScore + serviceBoost }
+      })
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((item) => item.article)
+      .slice(0, 4)
+  }, [kbQuery.data, selectedService, title, description])
 
   const submit = async () => {
     if (!serviceId || !title.trim() || !description.trim() || !impactedUser.trim()) {
@@ -68,17 +86,32 @@ export function CreateTicketPage() {
                 </button>
               ))}
             </div>
+            {!serviceId && (
+              <p className="mt-2 text-xs text-amber-300">Selecione um servico para habilitar a abertura do ticket.</p>
+            )}
           </div>
 
           <div className="grid gap-2">
             <p className="text-xs uppercase tracking-wide text-[var(--text-soft)]">Passo 2 - Formulario</p>
-            <Input placeholder="Titulo" value={title} onChange={(event) => setTitle(event.target.value)} />
-            <Textarea placeholder="Descricao" value={description} onChange={(event) => setDescription(event.target.value)} />
-            <Input placeholder="Usuario impactado" value={impactedUser} onChange={(event) => setImpactedUser(event.target.value)} />
+            <Input placeholder="Titulo" value={title} onChange={(event) => setTitle(event.target.value)} disabled={!serviceId} />
+            <Textarea placeholder="Descricao" value={description} onChange={(event) => setDescription(event.target.value)} disabled={!serviceId} />
+            <Input placeholder="Usuario impactado" value={impactedUser} onChange={(event) => setImpactedUser(event.target.value)} disabled={!serviceId} />
+
+            <div className="grid gap-2 md:grid-cols-2">
+              <Input
+                value={selectedService ? `Impacto herdado: ${selectedService.impact}` : 'Impacto herdado do servico'}
+                readOnly
+              />
+              <Input
+                value={selectedService ? `Urgencia herdada: ${selectedService.urgency}` : 'Urgencia herdada do servico'}
+                readOnly
+              />
+            </div>
 
             <Input
               type="file"
               multiple
+              disabled={!serviceId}
               onChange={(event) => {
                 const files = Array.from(event.target.files ?? [])
                 setAttachments(files.map((file) => ({ name: file.name, sizeKb: Math.ceil(file.size / 1024) })))
@@ -95,7 +128,7 @@ export function CreateTicketPage() {
               </ul>
             )}
 
-            <Button onClick={submit} disabled={createMutation.isPending}>
+            <Button onClick={submit} disabled={createMutation.isPending || !serviceId}>
               {createMutation.isPending ? 'Criando...' : 'Criar ticket'}
             </Button>
           </div>
@@ -108,7 +141,10 @@ export function CreateTicketPage() {
         </CardHeader>
         <CardContent className="space-y-2">
           {selectedService && <p className="text-xs text-[var(--text-soft)]">Baseada no servico {selectedService.name}</p>}
-          {(kbQuery.data ?? []).slice(0, 4).map((article) => (
+          {!suggestedArticles.length && (
+            <p className="text-xs text-[var(--text-soft)]">Digite titulo e descricao para receber sugestoes inteligentes.</p>
+          )}
+          {suggestedArticles.map((article) => (
             <div key={article.id} className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-2)] p-2">
               <p className="text-sm font-semibold">{article.title}</p>
               <p className="text-xs text-[var(--text-soft)]">{article.tags.join(', ')}</p>
