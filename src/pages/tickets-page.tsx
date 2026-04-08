@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Select } from '../components/ui/select'
 import { Table, TBody, TD, TH, THead } from '../components/ui/table'
+import { EmptyState } from '../components/empty-state'
 import { useAssignTicketMutation, useChangeStatusMutation, useTicketsQuery, useUsersQuery } from '../hooks/use-csc-data'
 import type { Priority, Ticket, TicketStatus } from '../types/domain'
 import { StatusBadge } from '../features/tickets/components/status-badge'
@@ -105,13 +106,53 @@ function loadStoredViewMode(): ViewMode {
   return window.localStorage.getItem(VIEW_MODE_STORAGE_KEY) === 'kanban' ? 'kanban' : 'table'
 }
 
+function applyQueryParamsToFilters(filters: TicketsFilterState, searchParams: URLSearchParams): TicketsFilterState {
+  const result = { ...filters }
+
+  // status=Status1,Status2
+  const statusParam = searchParams.get('status')
+  if (statusParam) {
+    result.statuses = statusParam
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s): s is TicketStatus => statusOptions.includes(s as TicketStatus))
+  }
+
+  // priority=High,Medium
+  const priorityParam = searchParams.get('priority')
+  if (priorityParam) {
+    result.priorities = priorityParam
+      .split(',')
+      .map((p) => p.trim())
+      .filter((p): p is Priority => priorityOptions.includes(p as Priority))
+  }
+
+  // quick=mine|unassigned|overdue|all
+  const quickParam = searchParams.get('quick')
+  if (quickParam && ['mine', 'unassigned', 'overdue', 'all'].includes(quickParam)) {
+    // Será aplicado depois
+  }
+
+  return result
+}
+
 function toggleItem<T extends string>(list: T[], value: T) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
 }
 
 export function TicketsPage() {
-  const [filters, setFilters] = useState<TicketsFilterState>(() => loadStoredFilters())
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>(() => loadStoredQuickFilter())
+  const [searchParams] = useSearchParams()
+  const [filters, setFilters] = useState<TicketsFilterState>(() => {
+    const stored = loadStoredFilters()
+    return applyQueryParamsToFilters(stored, searchParams)
+  })
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>(() => {
+    const quickParam = searchParams.get('quick')
+    if (quickParam && ['mine', 'unassigned', 'overdue'].includes(quickParam)) {
+      return quickParam as QuickFilter
+    }
+    return loadStoredQuickFilter()
+  })
   const [viewMode, setViewMode] = useState<ViewMode>(() => loadStoredViewMode())
   const [previewTicketId, setPreviewTicketId] = useState<string | null>(null)
   const role = useAppStore((state) => state.activeRole)
@@ -449,22 +490,28 @@ export function TicketsPage() {
 
           {viewMode === 'kanban' && <KanbanBoard tickets={filteredTickets} users={usersQuery.data ?? []} />}
 
-          {!filteredTickets.length && (
-            <div className="rounded-md border border-dashed border-[var(--border-subtle)] bg-[var(--surface-2)] p-4 text-sm text-[var(--text-soft)]">
-              <p className="font-medium text-[var(--text-strong)]">Nenhum ticket encontrado</p>
-              <p className="mt-1">
-                {quickFilter === 'mine' &&
-                  (isRequester ? 'Voce ainda nao abriu tickets.' : 'Voce nao tem tickets atribuidos no momento.')}
-                {quickFilter === 'unassigned' && 'Nenhum ticket nao atribuido encontrado.'}
-                {quickFilter === 'overdue' && 'Nenhum ticket em atraso encontrado.'}
-                {quickFilter === 'all' && 'Ajuste os filtros ou crie um novo ticket para iniciar o fluxo.'}
-              </p>
-              <div className="mt-3">
-                <Link to="/tickets/new" className="text-[var(--brand-700)] hover:underline">
-                  Criar novo ticket
-                </Link>
-              </div>
-            </div>
+          {!filteredTickets.length && viewMode === 'table' && (
+            <EmptyState
+              icon="search"
+              title="Nenhum ticket encontrado"
+              description={
+                quickFilter === 'mine'
+                  ? isRequester
+                    ? 'Você ainda não abriu tickets.'
+                    : 'Você não tem tickets atribuídos no momento.'
+                  : quickFilter === 'unassigned'
+                    ? 'Nenhum ticket não atribuído encontrado.'
+                    : quickFilter === 'overdue'
+                      ? 'Nenhum ticket em atraso encontrado.'
+                      : 'Ajuste os filtros ou crie um novo ticket para iniciar o fluxo.'
+              }
+              action={{
+                label: 'Criar novo ticket',
+                onClick: () => {
+                  window.location.href = '/tickets/new'
+                },
+              }}
+            />
           )}
         </CardContent>
       </Card>

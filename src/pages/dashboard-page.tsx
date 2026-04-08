@@ -1,5 +1,7 @@
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Skeleton } from '../components/ui/skeleton'
+import { EmptyState } from '../components/empty-state'
 import { useTicketsQuery, useUsersQuery } from '../hooks/use-csc-data'
 import { useAppStore } from '../store/app-store'
 import { KanbanBoard } from '../features/dashboard/kanban-board'
@@ -99,30 +101,42 @@ export function DashboardPage() {
       </div>
 
       <section className="grid gap-3 md:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Tickets abertos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold">{focusTickets.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Em andamento</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold text-[var(--brand-700)]">{inProgress.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Em atraso</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-semibold text-rose-500">{overdue.length}</p>
-          </CardContent>
-        </Card>
+        <Link to="/tickets?view=all">
+          <button className="w-full text-left transition-colors hover:bg-[var(--surface-2)]">
+            <Card className="cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle>Tickets abertos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold">{focusTickets.length}</p>
+              </CardContent>
+            </Card>
+          </button>
+        </Link>
+        <Link to="/tickets?status=Assigned,InProgress,InTriage">
+          <button className="w-full text-left transition-colors hover:bg-[var(--surface-2)]">
+            <Card className="cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle>Em andamento</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold text-[var(--brand-700)]">{inProgress.length}</p>
+              </CardContent>
+            </Card>
+          </button>
+        </Link>
+        <Link to="/tickets?quick=overdue">
+          <button className="w-full text-left transition-colors hover:bg-[var(--surface-2)]">
+            <Card className="cursor-pointer h-full">
+              <CardHeader>
+                <CardTitle>Em atraso</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-semibold text-rose-500">{overdue.length}</p>
+              </CardContent>
+            </Card>
+          </button>
+        </Link>
         <Card>
           <CardHeader>
             <CardTitle>Resolvidos hoje</CardTitle>
@@ -179,10 +193,11 @@ export function DashboardPage() {
                 </div>
               ))
             ) : (
-              <div className="rounded-md border border-dashed border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
-                <p className="text-sm font-medium text-[var(--text-strong)]">Fila limpa</p>
-                <p className="text-sm text-[var(--text-soft)]">Voce nao tem tickets atribuidos no momento.</p>
-              </div>
+              <EmptyState
+                icon="inbox"
+                title="Fila limpa"
+                description="Você não tem nenhum ticket atribuído no momento."
+              />
             )}
           </CardContent>
         </Card>
@@ -198,11 +213,12 @@ export function DashboardPage() {
                 <span className="text-xs text-[var(--text-soft)]">{ticket.status}</span>
               </div>
             ))}
-            {!tickets.length && (
-              <div className="rounded-md border border-dashed border-[var(--border-subtle)] bg-[var(--surface-2)] p-3">
-                <p className="text-sm font-medium text-[var(--text-strong)]">Sem backlog na area</p>
-                <p className="text-sm text-[var(--text-soft)]">Nenhum ticket em andamento para exibir.</p>
-              </div>
+            {!focusTickets.length && (
+              <EmptyState
+                icon="empty"
+                title="Sem backlog na área"
+                description="Nenhum ticket em andamento para exibir."
+              />
             )}
           </CardContent>
         </Card>

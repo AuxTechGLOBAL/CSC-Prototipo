@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { ConfirmActionDialog } from '../components/confirm-action-dialog'
 import { Dialog } from '../components/ui/dialog'
 import { Textarea } from '../components/ui/textarea'
+import { EmptyState } from '../components/empty-state'
 import { useApprovalMutation, useTicketsQuery, useUsersQuery } from '../hooks/use-csc-data'
 import { useAppStore } from '../store/app-store'
 import { describeTransitionPt } from '../lib/workflow'
@@ -104,7 +105,13 @@ export function ApprovalsPage() {
           )
         })}
 
-        {!ticketsQuery.data?.length && <p className="text-sm text-[var(--text-soft)]">Nenhuma aprovacao pendente.</p>}
+        {!ticketsQuery.data?.length && (
+          <EmptyState
+            icon="inbox"
+            title="Nenhuma aprovação pendente"
+            description="Você não tem nenhum ticket aguardando aprovação no momento."
+          />
+        )}
       </CardContent>
 
       <Dialog open={Boolean(ticket)} onClose={() => setActiveTicketId(null)} title={`Resumo do ticket - ${ticket?.id ?? ''}`}>

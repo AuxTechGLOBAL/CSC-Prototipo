@@ -1,7 +1,14 @@
 import { Badge } from '../../../components/ui/badge'
 import type { Ticket, TicketEventType, User } from '../../../types/domain'
 import { formatDate } from '../../../lib/utils'
-import { MessageSquare, GitBranch, UserCheck, FileClock } from 'lucide-react'
+import {
+  MessageSquare,
+  GitBranch,
+  UserCheck,
+  FileClock,
+  ThumbsUp,
+  ThumbsDown,
+} from 'lucide-react'
 import { UserAvatar } from './user-avatar'
 
 type TimelineEntry = {
@@ -9,20 +16,26 @@ type TimelineEntry = {
   createdAt: string
   actorId: string
   body: string
-  kind: 'comment' | 'status' | 'assignment' | 'system'
+  kind: 'comment' | 'comment-internal' | 'status' | 'assignment' | 'approved' | 'rejected' | 'system'
   isInternal?: boolean
   attachments?: Array<{ id: string; name: string; sizeKb: number }>
 }
 
-function mapEventKind(type: TicketEventType): TimelineEntry['kind'] {
+function mapEventKind(type: TicketEventType, isInternal?: boolean): TimelineEntry['kind'] {
+  if (type === 'commented') {
+    return isInternal ? 'comment-internal' : 'comment'
+  }
   if (type === 'status_changed' || type === 'closed' || type === 'reopened') {
     return 'status'
   }
   if (type === 'assigned') {
     return 'assignment'
   }
-  if (type === 'commented') {
-    return 'comment'
+  if (type === 'approved') {
+    return 'approved'
+  }
+  if (type === 'rejected') {
+    return 'rejected'
   }
   return 'system'
 }
@@ -31,32 +44,63 @@ function kindMeta(kind: TimelineEntry['kind']) {
   if (kind === 'comment') {
     return {
       icon: MessageSquare,
-      badge: 'Comentario',
+      badge: 'Comentário',
       variant: 'info' as const,
-      border: 'border-sky-700/25',
+      border: 'border-sky-500/20 bg-sky-500/5',
+      bgColor: 'bg-sky-500/10',
+    }
+  }
+  if (kind === 'comment-internal') {
+    return {
+      icon: MessageSquare,
+      badge: 'Comentário interno',
+      variant: 'warning' as const,
+      border: 'border-amber-500/20 bg-amber-500/5',
+      bgColor: 'bg-amber-500/10',
     }
   }
   if (kind === 'status') {
     return {
       icon: GitBranch,
-      badge: 'Status',
+      badge: 'Mudança de status',
       variant: 'warning' as const,
-      border: 'border-amber-700/25',
+      border: 'border-amber-500/20 bg-amber-500/5',
+      bgColor: 'bg-amber-500/10',
     }
   }
   if (kind === 'assignment') {
     return {
       icon: UserCheck,
-      badge: 'Atribuicao',
+      badge: 'Atribuição',
       variant: 'success' as const,
-      border: 'border-emerald-700/25',
+      border: 'border-emerald-500/20 bg-emerald-500/5',
+      bgColor: 'bg-emerald-500/10',
+    }
+  }
+  if (kind === 'approved') {
+    return {
+      icon: ThumbsUp,
+      badge: 'Aprovado',
+      variant: 'success' as const,
+      border: 'border-emerald-500/30 bg-emerald-500/5',
+      bgColor: 'bg-emerald-500/15',
+    }
+  }
+  if (kind === 'rejected') {
+    return {
+      icon: ThumbsDown,
+      badge: 'Rejeitado',
+      variant: 'danger' as const,
+      border: 'border-rose-500/30 bg-rose-500/5',
+      bgColor: 'bg-rose-500/15',
     }
   }
   return {
     icon: FileClock,
     badge: 'Sistema',
     variant: 'neutral' as const,
-    border: 'border-[var(--border-subtle)]',
+    border: 'border-[var(--border-subtle)] bg-[var(--surface-1)]',
+    bgColor: 'bg-[var(--surface-2)]',
   }
 }
 
@@ -65,19 +109,19 @@ export function Timeline({ ticket, users }: { ticket: Ticket; users: User[] }) {
     ...ticket.events
       .filter((event) => event.type !== 'commented')
       .map((event) => ({
-      id: event.id,
-      actorId: event.authorId,
-      createdAt: event.createdAt,
-      body: event.message,
-      kind: mapEventKind(event.type),
-      isInternal: false,
+        id: event.id,
+        actorId: event.authorId,
+        createdAt: event.createdAt,
+        body: event.message,
+        kind: mapEventKind(event.type, false),
+        isInternal: false,
       })),
     ...ticket.comments.map((comment) => ({
       id: comment.id,
       actorId: comment.authorId,
       createdAt: comment.createdAt,
       body: comment.body,
-      kind: 'comment' as const,
+      kind: mapEventKind('commented', comment.isInternal),
       isInternal: comment.isInternal,
       attachments: comment.attachments?.map((attachment) => ({
         id: attachment.id,
@@ -106,29 +150,42 @@ export function Timeline({ ticket, users }: { ticket: Ticket; users: User[] }) {
         const Icon = meta.icon
 
         return (
-          <li key={entry.id} className={`rounded-lg border bg-[var(--surface-2)] p-3 ${meta.border}`}>
-            <div className="mb-2 flex items-start justify-between gap-2">
+          <li key={entry.id} className={`rounded-lg border-2 p-4 transition-colors ${meta.border}`}>
+            <div className="mb-3 flex items-start justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Icon size={14} className="text-[var(--text-soft)]" />
-                <Badge variant={meta.variant}>{meta.badge}</Badge>
+                <div className={`rounded-lg p-2 ${meta.bgColor}`}>
+                  <Icon size={16} className="text-[var(--text-soft)]" />
+                </div>
+                <Badge variant={meta.variant} className="font-semibold">
+                  {meta.badge}
+                </Badge>
                 {entry.isInternal && <Badge variant="warning">Interno</Badge>}
               </div>
-              <UserAvatar user={actor} dense />
+              <div className="flex items-center gap-2">
+                <UserAvatar user={actor} dense />
+                {actor && (
+                  <div className="text-xs">
+                    <p className="font-semibold text-[var(--text-strong)]">{actor.name}</p>
+                    <p className="text-[var(--text-soft)]">{actor.role}</p>
+                  </div>
+                )}
+              </div>
             </div>
-            <p className="text-sm text-[var(--text-strong)]">{entry.body}</p>
+            <p className="mb-2 text-sm text-[var(--text-strong)]">{entry.body}</p>
             {!!entry.attachments?.length && (
-              <ul className="mt-2 rounded-md border border-[var(--border-subtle)] bg-[var(--surface-1)] p-2 text-xs text-[var(--text-soft)]">
+              <ul className="mb-2 rounded-lg border border-[var(--border-subtle)] bg-[var(--surface-1)] p-3 text-xs text-[var(--text-soft)]">
                 {entry.attachments.map((attachment) => (
-                  <li key={attachment.id}>
-                    {attachment.name} ({attachment.sizeKb} KB)
+                  <li key={attachment.id} className="flex items-center gap-2">
+                    <span className="truncate">{attachment.name}</span>
+                    <span className="shrink-0">{attachment.sizeKb} KB</span>
                   </li>
                 ))}
               </ul>
             )}
-            <div className="mt-2 flex items-center justify-between text-xs text-[var(--text-soft)]">
+            <div className="flex items-center justify-between text-xs text-[var(--text-soft)]">
               <span>{actor?.name ?? entry.actorId}</span>
               <span>
-                {relativeTime(entry.createdAt)} ({formatDate(entry.createdAt)})
+                {relativeTime(entry.createdAt)} • {formatDate(entry.createdAt)}
               </span>
             </div>
           </li>

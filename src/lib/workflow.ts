@@ -93,17 +93,22 @@ export function describeTransitionPt(currentStatus: TicketStatus, nextStatus: Ti
 }
 
 const transitionActionLabels: Partial<Record<`${TicketStatus}->${TicketStatus}`, string>> = {
-  'New->InTriage': 'Start Triage',
-  'InTriage->AwaitingApproval': 'Solicitar aprovacao',
-  'InTriage->Assigned': 'Atribuir atendimento',
-  'Assigned->InProgress': 'Start Progress',
+  'New->InTriage': 'Iniciar triagem',
+  'New->Cancelled': 'Cancelar',
+  'InTriage->AwaitingApproval': 'Solicitar aprovação',
+  'InTriage->Assigned': 'Atribuir',
+  'InTriage->Cancelled': 'Cancelar',
+  'Assigned->InProgress': 'Iniciar atendimento',
+  'Assigned->Cancelled': 'Cancelar',
   'InProgress->WaitingRequester': 'Aguardar solicitante',
-  'InProgress->Resolved': 'Resolve',
-  'Resolved->Closed': 'Close',
-  'Resolved->InProgress': 'Reopen',
+  'InProgress->Resolved': 'Resolver',
+  'InProgress->Cancelled': 'Cancelar',
+  'Resolved->Closed': 'Fechar',
+  'Resolved->InProgress': 'Reabrir',
   'WaitingRequester->InProgress': 'Retomar atendimento',
-  'AwaitingApproval->Assigned': 'Aprovado e atribuir',
-  'AwaitingApproval->Cancelled': 'Cancelar ticket',
+  'WaitingRequester->Cancelled': 'Cancelar',
+  'AwaitingApproval->Assigned': 'Aprovar e atribuir',
+  'AwaitingApproval->Cancelled': 'Rejeitar',
 }
 
 export function getTransitionActionLabel(currentStatus: TicketStatus, nextStatus: TicketStatus): string {

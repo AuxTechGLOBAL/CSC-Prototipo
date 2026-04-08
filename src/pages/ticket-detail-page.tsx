@@ -16,6 +16,7 @@ import { SLAIndicator } from '../features/tickets/components/sla-indicator'
 import { Timeline } from '../features/tickets/components/timeline'
 import { CommentBox } from '../features/tickets/components/comment-box'
 import { UserAvatar } from '../features/tickets/components/user-avatar'
+import { AttachmentList } from '../features/tickets/components/attachment-viewer'
 import type { TicketStatus } from '../types/domain'
 import { Badge } from '../components/ui/badge'
 import { formatDate } from '../lib/utils'
@@ -339,13 +340,8 @@ export function TicketDetailPage() {
             <CardHeader>
               <CardTitle>Anexos</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {ticket.attachments.map((attachment) => (
-                <div key={attachment.id} className="rounded-md border border-[var(--border-subtle)] bg-[var(--surface-2)] p-2 text-sm">
-                  {attachment.name} ({attachment.sizeKb} KB)
-                </div>
-              ))}
-              {!ticket.attachments.length && <p className="text-sm text-[var(--text-soft)]">Sem anexos.</p>}
+            <CardContent>
+              <AttachmentList attachments={ticket.attachments} />
             </CardContent>
           </Card>
 
